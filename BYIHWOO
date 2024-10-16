@@ -1,0 +1,256 @@
+local Settings = {
+    Color = Color3.fromRGB(255, 255, 255), -- Color of the line
+    Thickness = 0.5, -- Thickness of the line (Overruled by AutoThickness if activated)
+    Transparency = 0.7, -- 1 Visible - 0 Not Visible
+    AutoThickness = true, -- Makes Thickness above futile, scales according to distance, good for less encumbered screen
+    Length = 5, -- In studs of the line
+    Smoothness = 0.2 -- 0.01 - Less Smooth(Faster), 1 - Smoother (Slower)
+}
+
+local toggle = true -- use this variable if you wanna integrate into a GUI
+
+local player = game:GetService("Players").LocalPlayer
+local camera = game:GetService("Workspace").CurrentCamera
+
+local function ESP(plr) --//Main function handling specific plr loop esp for line etc
+    local line = Drawing.new("Line") --// Parse and Set the line for tracer
+    line.Visible = false
+    line.From = Vector2.new(0, 0)
+    line.To = Vector2.new(0, 0)
+    line.Color = Settings.Color
+    line.Thickness = Settings.Thickness
+    line.Transparency = Settings.Transparency
+
+    local function Updater() --// Function to update the ESP therefore, line destinations etc every /render/
+        local connection
+        connection = game:GetService("RunService").RenderStepped:Connect(function() -- Putting function in a connection var in order to disconnect if needed, to save performance
+            if toggle and plr.Character ~= nil and plr.Character:FindFirstChild("Humanoid") ~= nil and plr.Character:FindFirstChild("HumanoidRootPart") ~= nil and plr.Character.Humanoid.Health > 0 and plr.Character:FindFirstChild("Head") ~= nil then
+                local headpos, OnScreen = camera:WorldToViewportPoint(plr.Character.Head.Position)
+                if OnScreen then -- checks if player is on screen or not
+                    local offsetCFrame = CFrame.new(0, 0, -Settings.Length)
+                    local check = false
+                    line.From = Vector2.new(headpos.X, headpos.Y)
+                    if Settings.AutoThickness then
+                        local distance = (player.Character.HumanoidRootPart.Position - plr.Character.HumanoidRootPart.Position).magnitude --//AutoThickness
+                        local value = math.clamp(1/distance*100, 0.1, 3) --0.1 is min thickness, 4 is max
+                        line.Thickness = value
+                    end
+                    repeat
+                        local dir = plr.Character.Head.CFrame:ToWorldSpace(offsetCFrame)
+                        offsetCFrame = offsetCFrame * CFrame.new(0, 0, Settings.Smoothness)
+                        local dirpos, vis = camera:WorldToViewportPoint(Vector3.new(dir.X, dir.Y, dir.Z))
+                        if vis then
+                            check = true
+                            line.To = Vector2.new(dirpos.X, dirpos.Y)
+                            line.Visible = true
+                            offsetCFrame = CFrame.new(0, 0, -Settings.Length)
+                        end
+                    until check == true
+                else 
+                    line.Visible = false
+                end
+            else 
+                line.Visible = false
+                if game.Players:FindFirstChild(plr.Name) == nil then
+                    connection:Disconnect()
+                end
+            end
+        end)
+    end
+    coroutine.wrap(Updater)()
+end
+
+for i, v in pairs(game:GetService("Players"):GetPlayers()) do
+    if v.Name ~= player.Name then
+        coroutine.wrap(ESP)(v)
+    end
+end
+
+game.Players.PlayerAdded:Connect(function(newplr)
+    if newplr.Name ~= player.Name then
+        coroutine.wrap(ESP)(newplr)
+    end
+end)
+
+
+
+
+local Settings = {
+  Box_Color = Color3.fromRGB(255, 0, 0),
+  Tracer_Color = Color3.fromRGB(255, 0, 0),
+  Tracer_Thickness = 1,
+  Box_Thickness = 1,
+  Tracer_Origin = "Bottom", -- Middle or Bottom, if FollowMouse is on this won't matter...
+  Tracer_FollowMouse = false,
+  Tracers = true,
+  ESP_Enabled = true -- This flag controls whether ESP is on or off
+}
+
+local Team_Check = {
+  TeamCheck = false, -- if TeamColor is on this won't matter...
+  Green = Color3.fromRGB(0, 255, 0),
+  Red = Color3.fromRGB(255, 0, 0)
+}
+local TeamColor = true
+
+local player = game:GetService("Players").LocalPlayer
+local camera = game:GetService("Workspace").CurrentCamera
+local mouse = player:GetMouse()
+
+local function NewQuad(thickness, color)
+  local quad = Drawing.new("Quad")
+  quad.Visible = false
+  quad.PointA = Vector2.new(0, 0)
+  quad.PointB = Vector2.new(0, 0)
+  quad.PointC = Vector2.new(0, 0)
+  quad.PointD = Vector2.new(0, 0)
+  quad.Color = color
+  quad.Filled = false
+  quad.Thickness = thickness
+  quad.Transparency = 1
+  return quad
+end
+
+local function NewLine(thickness, color)
+  local line = Drawing.new("Line")
+  line.Visible = false
+  line.From = Vector2.new(0, 0)
+  line.To = Vector2.new(0, 0)
+  line.Color = color
+  line.Thickness = thickness
+  line.Transparency = 1
+  return line
+end
+
+local function Visibility(state, lib)
+  for u, x in pairs(lib) do
+      x.Visible = state
+  end
+end
+
+local function ToColor3(col)
+  local r = col.r
+  local g = col.g
+  local b = col.b
+  return Color3.new(r, g, b)
+end
+
+local black = Color3.fromRGB(0, 0, 0)
+
+local function ESP(plr)
+  local library = {
+      blacktracer = NewLine(Settings.Tracer_Thickness * 2, black),
+      tracer = NewLine(Settings.Tracer_Thickness, Settings.Tracer_Color),
+      black = NewQuad(Settings.Box_Thickness * 2, black),
+      box = NewQuad(Settings.Box_Thickness, Settings.Box_Color),
+      healthbar = NewLine(3, black),
+      greenhealth = NewLine(1.5, black)
+  }
+
+  local function Colorize(color)
+      for u, x in pairs(library) do
+          if x ~= library.healthbar and x ~= library.greenhealth and x ~= library.blacktracer and x ~= library.black then
+              x.Color = color
+          end
+      end
+  end
+
+ local function Updater()
+    local connection
+    connection = game:GetService("RunService").RenderStepped:Connect(function()
+        if not Settings.ESP_Enabled then
+            Visibility(false, library)
+            return -- Skip rendering if ESP is disabled
+        end
+
+        if plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character.Humanoid.Health > 0 and plr.Character:FindFirstChild("Head") then
+            local HumPos, OnScreen = camera:WorldToViewportPoint(plr.Character.HumanoidRootPart.Position)
+            
+            -- Check if the player is on screen
+            if OnScreen then
+                local head = camera:WorldToViewportPoint(plr.Character.Head.Position)
+                local DistanceY = math.clamp((Vector2.new(head.X, head.Y) - Vector2.new(HumPos.X, HumPos.Y)).magnitude, 2, math.huge)
+
+                -- Update the thickness dynamically
+                library.box.Thickness = Settings.Box_Thickness
+                library.black.Thickness = Settings.Box_Thickness * 2
+                library.tracer.Thickness = Settings.Tracer_Thickness
+                library.blacktracer.Thickness = Settings.Tracer_Thickness * 2
+
+                -- Update positions
+                local function Size(item)
+                    item.PointA = Vector2.new(HumPos.X + DistanceY, HumPos.Y - DistanceY * 2)
+                    item.PointB = Vector2.new(HumPos.X - DistanceY, HumPos.Y - DistanceY * 2)
+                    item.PointC = Vector2.new(HumPos.X - DistanceY, HumPos.Y + DistanceY * 2)
+                    item.PointD = Vector2.new(HumPos.X + DistanceY, HumPos.Y + DistanceY * 2)
+                end
+                Size(library.box)
+                Size(library.black)
+
+                if Settings.Tracers then
+                    if Settings.Tracer_Origin == "Middle" then
+                        library.tracer.From = camera.ViewportSize * 0.5
+                        library.blacktracer.From = camera.ViewportSize * 0.5
+                    elseif Settings.Tracer_Origin == "Bottom" then
+                        library.tracer.From = Vector2.new(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y)
+                        library.blacktracer.From = Vector2.new(camera.ViewportSize.X * 0.5, camera.ViewportSize.Y)
+                    end
+                    if Settings.Tracer_FollowMouse then
+                        library.tracer.From = Vector2.new(mouse.X, mouse.Y + 36)
+                        library.blacktracer.From = Vector2.new(mouse.X, mouse.Y + 36)
+                    end
+                    library.tracer.To = Vector2.new(HumPos.X, HumPos.Y + DistanceY * 2)
+                    library.blacktracer.To = Vector2.new(HumPos.X, HumPos.Y + DistanceY * 2)
+                else
+                    library.tracer.From = Vector2.new(0, 0)
+                    library.blacktracer.From = Vector2.new(0, 0)
+                    library.tracer.To = Vector2.new(0, 0)
+                    library.blacktracer.To = Vector2.new(0, 0)
+                end
+
+                local d = (Vector2.new(HumPos.X - DistanceY, HumPos.Y - DistanceY * 2) - Vector2.new(HumPos.X - DistanceY, HumPos.Y + DistanceY * 2)).magnitude
+                local healthoffset = plr.Character.Humanoid.Health / plr.Character.Humanoid.MaxHealth * d
+
+                library.greenhealth.From = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY * 2)
+                library.greenhealth.To = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY * 2 - healthoffset)
+
+                library.healthbar.From = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY * 2)
+                library.healthbar.To = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y - DistanceY * 2)
+
+                library.greenhealth.Color = Color3.fromRGB(255, 0, 0):lerp(Color3.fromRGB(0, 255, 0), plr.Character.Humanoid.Health / plr.Character.Humanoid.MaxHealth)
+
+                if Team_Check.TeamCheck then
+                    if plr.TeamColor == player.TeamColor then
+                        Colorize(Team_Check.Green)
+                    else
+                        Colorize(Team_Check.Red)
+                    end
+                else
+                    library.tracer.Color = Settings.Tracer_Color
+                    library.box.Color = Settings.Box_Color
+                end
+                if TeamColor == true then
+                    Colorize(plr.TeamColor.Color)
+                end
+                Visibility(true, library) -- Show ESP when on screen
+            else
+                Visibility(false, library) -- Hide ESP when not on screen
+            end
+        else
+            Visibility(false, library) -- Hide if character or health is invalid
+            if not game.Players:FindFirstChild(plr.Name) then
+                Visibility(false, library) -- Hide ESP elements
+                connection:Disconnect() -- Disconnect the connection when player leaves
+            end
+        end
+    end)
+end
+
+  coroutine.wrap(Updater)()
+end
+
+game.Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if leavingPlayer == plr then
+        Visibility(false, library) -- Hide ESP elements for local player
+    end
+end)
